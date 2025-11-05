@@ -12,13 +12,21 @@ const ALLOW_ORIGIN = process.env.CORS_ORIGIN || "*";
 app.use(cors({ origin: ALLOW_ORIGIN }));
 
 // Datei-Uploads bis 10 MB pro Bild
-const upload = multer({ limits: { fileSize: 10 * 1024 * 1024 } });
+// Datei-Uploads bis 10 MB pro Bild, max. 60 Dateien
+const upload = multer({
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10 MB pro Datei
+    files: 60                   // maximal 60 Dateien pro Upload
+  }
+});
+
 
 // Healthcheck (damit Render sieht: Dienst läuft)
 app.get("/", (req, res) => res.send("Boulehris API läuft ✅"));
 
 // Upload-Endpunkt: nimmt Bilder an, verschickt E-Mail
-app.post("/upload", upload.array("files", 20), async (req, res) => {
+app.post("/upload", upload.array("files", 60), async (req, res, next) => {
+
   try {
     const { name, phone, email, message } = req.body || {};
 
@@ -62,12 +70,28 @@ if (!brevoResp.ok) {
 }
 // ---- ENDE neu ----
 
+// ---- ENDE neu ----
 
-    res.json({ ok: true });
+const okBody = await brevoResp.json().catch(() => ({}));
+console.log("BREVO_OK:", okBody);
+
+res.json({ ok: true });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, error: "MAIL_FAILED" });
   }
+});
+// Fehlerbehandlung für zu viele oder zu große Dateien
+app.use((err, req, res, next) => {
+  if (err && err.code === 'LIMIT_UNEXPECTED_FILE') {
+    console.warn("Zu viele Dateien hochgeladen");
+    return res.status(400).json({ ok: false, error: 'TOO_MANY_FILES', max: 60 });
+  }
+  if (err && err.code === 'LIMIT_FILE_SIZE') {
+    console.warn("Eine Datei war zu groß");
+    return res.status(400).json({ ok: false, error: 'FILE_TOO_BIG', maxBytes: 10 * 1024 * 1024 });
+  }
+  next(err);
 });
 
 // WICHTIG: Render gibt einen Port vor → den benutzen!
