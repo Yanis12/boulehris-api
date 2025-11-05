@@ -22,15 +22,22 @@ app.post("/upload", upload.array("files", 20), async (req, res) => {
   try {
     const { name, phone, email, message } = req.body || {};
 
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT || 587),
-      secure: false,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
-      }
-    });
+    const secureFlag = (process.env.SMTP_SECURE === 'true') || String(process.env.SMTP_PORT) === '465';
+
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT || 587),
+  secure: secureFlag, // true => SSL (Port 465), false => StartTLS (587)
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS
+  },
+  connectionTimeout: 15000,  // 15s
+  greetingTimeout: 10000,    // 10s
+  socketTimeout: 20000       // 20s
+  // tls: { rejectUnauthorized: false } // nur falls es Zertifikatsprobleme gäbe (normal nicht nötig)
+});
+
 
     const attachments = (req.files || []).map(f => ({
       filename: f.originalname,
