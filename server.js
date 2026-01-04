@@ -7,9 +7,29 @@ import dotenv from "dotenv";
 dotenv.config();
 const app = express();
 
-// CORS: erlaube deine Netlify-Domain (oder * wenn du nichts ändern willst)
-const ALLOW_ORIGIN = process.env.CORS_ORIGIN || "*";
-app.use(cors({ origin: ALLOW_ORIGIN }));
+// CORS: erlaubt 1 oder mehrere Origins (kommasepariert) oder alles, wenn nichts gesetzt ist
+const raw = (process.env.CORS_ORIGIN || "").trim();
+const allowList = raw
+  ? raw.split(",").map(s => s.trim()).filter(Boolean)
+  : [];
+
+app.use(cors({
+  origin: (origin, cb) => {
+    // z.B. Requests von Tools/Healthchecks ohne Origin
+    if (!origin) return cb(null, true);
+
+    // Wenn keine Liste gesetzt ist: alles erlauben (wie "*")
+    if (allowList.length === 0) return cb(null, true);
+
+    // Nur erlaubte Origins erlauben
+    if (allowList.includes(origin)) return cb(null, true);
+
+    return cb(new Error("Not allowed by CORS: " + origin));
+  }
+}));
+
+// Preflight sauber beantworten
+app.options("*", cors());
 
 // Upload-Limits: 10 MB je Datei, max. 60 Dateien (wie bei dir)
 const upload = multer({
